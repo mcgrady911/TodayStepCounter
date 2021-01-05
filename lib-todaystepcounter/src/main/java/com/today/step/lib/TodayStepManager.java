@@ -9,6 +9,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.Build;
+import android.os.Bundle;
 import android.support.annotation.RequiresApi;
 import android.support.v4.content.ContextCompat;
 
@@ -19,12 +20,27 @@ import android.support.v4.content.ContextCompat;
 
 public class TodayStepManager {
 
-    private static final String TAG = "TodayStepManager";
+    private static final String TAG = TodayStepManager.class.getSimpleName();
 
-    public static void startTodayStepService(Application application) {
+    private static boolean isDebug;
+
+    public static boolean isDebug() {
+        return isDebug;
+    }
+
+    public static void setDebug(boolean isDebug) {
+        TodayStepManager.isDebug = isDebug;
+    }
+
+    public static void startTodayStepService(Application application, Bundle extras) {
         try {
             Intent intent = new Intent(application, TodayStepService.class);
-            ContextCompat.startForegroundService(application, intent);
+            intent.setPackage(application.getPackageName());
+            if (extras != null && !extras.isEmpty()) {
+                intent.putExtras(extras);
+            }
+            //ContextCompat.startForegroundService(application, intent);
+            application.startService(intent);
         } catch (Exception e) {
             e.printStackTrace();
 //            https://stackoverflow.com/questions/38764497/security-exception-unable-to-start-service-user-0-is-restricted
@@ -36,9 +52,23 @@ public class TodayStepManager {
         }
     }
 
-    public static boolean bindService(Activity activity, ServiceConnection conn) {
+    public static void startTodayStepService(Application application) {
+        startTodayStepService(application, null);
+    }
+
+    public static void stopTodayStepService(Application application) {
+        Intent intent = new Intent(application, TodayStepService.class);
+        intent.setPackage(application.getPackageName());
+        application.stopService(intent);
+    }
+
+    public static boolean bindService(Activity activity, Bundle extras, ServiceConnection conn) {
         try {
             Intent intent = new Intent(activity, TodayStepService.class);
+            intent.setPackage(activity.getPackageName());
+            if (extras != null && !extras.isEmpty()) {
+                intent.putExtras(extras);
+            }
             return activity.bindService(intent, conn, Activity.BIND_AUTO_CREATE);
         } catch (Exception e) {
             e.printStackTrace();
@@ -50,6 +80,13 @@ public class TodayStepManager {
 //            对开发者处理建议：在服务启动的地方进行try catch防止崩溃即可（也是“1元夺宝”APP目前的处理方式）
         }
         return false;
+    }
 
+    public static boolean bindService(Activity activity, ServiceConnection conn) {
+        return bindService(activity, null, conn);
+    }
+
+    public static void unbindService(Context context, ServiceConnection conn) {
+        context.unbindService(conn);
     }
 }

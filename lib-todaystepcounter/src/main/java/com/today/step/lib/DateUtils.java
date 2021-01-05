@@ -7,7 +7,7 @@ import java.util.Date;
 /**
  * @Description: 时间工具类（时间格式转换方便类）
  */
-class DateUtils {
+final class DateUtils {
 
     private static ThreadLocal<SimpleDateFormat> SIMPLE_DATE_FORMAT = new ThreadLocal<>();
 

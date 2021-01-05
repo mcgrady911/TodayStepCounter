@@ -1,8 +1,6 @@
 package com.today.step;
 
 import android.content.ComponentName;
-import android.content.Context;
-import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.Handler;
 import android.os.IBinder;
@@ -10,17 +8,21 @@ import android.os.Message;
 import android.os.RemoteException;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
 import android.widget.TextView;
 
 import com.today.step.lib.ISportStepInterface;
 import com.today.step.lib.TodayStepManager;
 import com.today.step.lib.TodayStepService;
 
-public class MainActivity extends AppCompatActivity {
+import java.util.Currency;
 
-    private static String TAG = "MainActivity";
+public class MainActivity extends AppCompatActivity implements View.OnClickListener {
+
+    private static String TAG = MainActivity.class.getSimpleName();
 
     private static final int REFRESH_STEP_WHAT = 0;
 
@@ -36,25 +38,40 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView timeTextView;
 
+    private Button btnSwitchUser, btnLogout;
+
+    static final String[] userIds = new String[]{"111", "222", "333"};
+    private int currentUserIndex = 0;
+    private String currentUser;
+
+    private ServiceConnection serviceConnection;
+    private boolean bindService;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        //初始化计步模块
-        TodayStepManager.startTodayStepService(getApplication());
-
         timeTextView = (TextView) findViewById(R.id.timeTextView);
-        mStepArrayTextView = (TextView) findViewById(R.id.stepArrayTextView);
+//        mStepArrayTextView = (TextView) findViewById(R.id.stepArrayTextView);
 
-        //开启计步Service，同时绑定Activity进行aidl通信
-        Intent intent = new Intent(this, TodayStepService.class);
-        startService(intent);
-        bindService(intent, new ServiceConnection() {
+        btnSwitchUser = findViewById(R.id.btn_switch_user);
+        btnSwitchUser.setOnClickListener(this);
+        btnLogout = findViewById(R.id.btn_loginout);
+        btnLogout.setOnClickListener(this);
+
+        currentUser = userIds[currentUserIndex];
+
+        Bundle bundle = new Bundle();
+        bundle.putString(TodayStepService.INTENT_USER_ID, currentUser);
+        //初始化计步模块
+        TodayStepManager.startTodayStepService(getApplication(), bundle);
+
+        serviceConnection = new ServiceConnection() {
             @Override
-            public void onServiceConnected(ComponentName name, IBinder service) {
+            public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
                 //Activity和Service通过aidl进行通信
-                iSportStepInterface = ISportStepInterface.Stub.asInterface(service);
+                iSportStepInterface = ISportStepInterface.Stub.asInterface(iBinder);
                 try {
                     mStepSum = iSportStepInterface.getCurrentTimeSportStep();
                     updateStepCount();
@@ -62,15 +79,16 @@ public class MainActivity extends AppCompatActivity {
                     e.printStackTrace();
                 }
                 mDelayHandler.sendEmptyMessageDelayed(REFRESH_STEP_WHAT, TIME_INTERVAL_REFRESH);
-
             }
 
             @Override
-            public void onServiceDisconnected(ComponentName name) {
+            public void onServiceDisconnected(ComponentName componentName) {
 
             }
-        }, Context.BIND_AUTO_CREATE);
+        };
 
+        //开启计步Service，同时绑定Activity进行aidl通信
+        bindService = TodayStepManager.bindService(this, serviceConnection);
         //计时器
         mhandmhandlele.post(timeRunable);
 
@@ -105,26 +123,91 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateStepCount() {
-        Log.e(TAG, "updateStepCount : " + mStepSum);
+        Log.e(TAG, "currentUser : " + currentUser + "  updateStepCount : " + mStepSum);
         TextView stepTextView = (TextView) findViewById(R.id.stepTextView);
         stepTextView.setText(mStepSum + "步");
 
     }
 
+    @Override
     public void onClick(View view) {
         switch (view.getId()) {
-            case R.id.stepArrayButton: {
+//            case R.id.stepArrayButton: {
                 //获取所有步数列表
-                if (null != iSportStepInterface) {
+//                if (null != iSportStepInterface) {
+//                    try {
+//                        String stepArray = iSportStepInterface.getTodaySportStepArray();
+//                        mStepArrayTextView.setText(stepArray);
+//                    } catch (RemoteException e) {
+//                        e.printStackTrace();
+//                    }
+//                }
+//                break;
+//            }
+            case R.id.btn_switch_user:
+
+                int userIdIndex = currentUserIndex;
+                if (userIdIndex >= userIds.length - 1) {
+                    userIdIndex = 0;
+                } else {
+                    userIdIndex++;
+                }
+
+                String userId = userIds[userIdIndex];
+
+                if (!TextUtils.isEmpty(userId) && !userId.equals(currentUser)) {
+                    currentUserIndex = userIdIndex;
+                    currentUser = userId;
+                    Bundle bundle = new Bundle();
+                    bundle.putString(TodayStepService.INTENT_USER_ID, currentUser);
+                    TodayStepManager.startTodayStepService(getApplication(), bundle);
+
+                    serviceConnection = new ServiceConnection() {
+                        @Override
+                        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+                            //Activity和Service通过aidl进行通信
+                            iSportStepInterface = ISportStepInterface.Stub.asInterface(iBinder);
+                            try {
+                                mStepSum = iSportStepInterface.getCurrentTimeSportStep();
+                                updateStepCount();
+                            } catch (RemoteException e) {
+                                e.printStackTrace();
+                            }
+                            mDelayHandler.sendEmptyMessageDelayed(REFRESH_STEP_WHAT, TIME_INTERVAL_REFRESH);
+                        }
+
+                        @Override
+                        public void onServiceDisconnected(ComponentName componentName) {
+                        }
+                    };
+
+                    //开启计步Service，同时绑定Activity进行aidl通信
+                    TodayStepManager.bindService(this, serviceConnection);
+                }
+                break;
+            case R.id.btn_loginout:
+                if (iSportStepInterface != null) {
                     try {
-                        String stepArray = iSportStepInterface.getTodaySportStepArray();
-                        mStepArrayTextView.setText(stepArray);
+                        iSportStepInterface.stopTodayStepCounter();
                     } catch (RemoteException e) {
                         e.printStackTrace();
                     }
+
+                    iSportStepInterface = null;
                 }
+
+                mStepSum = 0;
+                if (mDelayHandler != null) {
+                    mDelayHandler.removeMessages(REFRESH_STEP_WHAT);
+                }
+
+                if (bindService && serviceConnection != null) {
+                    TodayStepManager.unbindService(this, serviceConnection);
+                    serviceConnection = null;
+                    bindService = false;
+                }
+                TodayStepManager.stopTodayStepService(getApplication());
                 break;
-            }
             default:
                 break;
         }

@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.app.Application;
 import android.os.Bundle;
 
+import com.today.step.lib.TodayStepManager;
+
 
 public class TSApplication extends Application {
 
@@ -16,6 +18,8 @@ public class TSApplication extends Application {
         super.onCreate();
 
         sApplication = this;
+
+        TodayStepManager.setDebug(true);
 
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
             @Override

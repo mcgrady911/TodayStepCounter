@@ -20,12 +20,9 @@ import android.os.Message;
 import android.os.RemoteException;
 import android.text.TextUtils;
 
-import com.andrjhf.lib.jlogger.JLoggerConstant;
-import com.andrjhf.lib.jlogger.JLoggerWraper;
-import com.andrjhf.notification.api.compat.NotificationApiCompat;
-
 import org.json.JSONArray;
 
+import java.lang.ref.WeakReference;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -35,9 +32,9 @@ import java.util.Map;
 import static com.today.step.lib.SportStepJsonUtils.getCalorieByStep;
 import static com.today.step.lib.SportStepJsonUtils.getDistanceByStep;
 
-public class TodayStepService extends Service implements Handler.Callback {
+public class TodayStepService extends Service {
 
-    private static final String TAG = "TodayStepService";
+    private static final String TAG = TodayStepService.class.getSimpleName();
 
     private static final String STEP_CHANNEL_ID = "stepChannelId";
 
@@ -49,7 +46,7 @@ public class TodayStepService extends Service implements Handler.Callback {
     /**
      * 保存数据库频率
      */
-    private static final int DB_SAVE_COUNTER = 300;
+    private static final int DB_SAVE_COUNTER = 10;
 
     /**
      * 传感器刷新频率
@@ -85,6 +82,8 @@ public class TodayStepService extends Service implements Handler.Callback {
     public static final String INTENT_NAME_0_SEPARATE = "intent_name_0_separate";
     public static final String INTENT_NAME_BOOT = "intent_name_boot";
     public static final String INTENT_STEP_INIT = "intent_step_init";
+    public static final String INTENT_NOTIFICATION_SHOW = "intent_notification_show";
+    public static final String INTENT_USER_ID = "intent_user_id";
 
     /**
      * 当前步数
@@ -107,6 +106,9 @@ public class TodayStepService extends Service implements Handler.Callback {
     private NotificationApiCompat mNotificationApiCompat;
 
     private boolean mSeparate = false;
+    /**
+     * 开机启动完成标识
+     */
     private boolean mBoot = false;
 
     /**
@@ -114,62 +116,82 @@ public class TodayStepService extends Service implements Handler.Callback {
      */
     private int mDbSaveCount = 0;
 
+    private boolean mShowNotification = false;
+
     /**
      * 数据库
      */
     private ITodayStepDBHelper mTodayStepDBHelper;
 
-    private final Handler sHandler = new Handler(this);
+//    private final Handler sHandler = new Handler(this);
 
-    @Override
-    public boolean handleMessage(Message msg) {
-        switch (msg.what) {
-            case HANDLER_WHAT_SAVE_STEP: {
-                //走路停止保存数据库
-                mDbSaveCount = 0;
+    private Handler sHandler;
+    static class StepHandler extends Handler {
+        private final WeakReference<TodayStepService> service;
 
-                saveDb(true, CURRENT_STEP);
-                break;
-            }
-            case HANDLER_WHAT_REFRESH_NOTIFY_STEP: {
-                //刷新通知栏
-
-                updateTodayStep(CURRENT_STEP);
-
-                sHandler.removeMessages(HANDLER_WHAT_REFRESH_NOTIFY_STEP);
-                sHandler.sendEmptyMessageDelayed(HANDLER_WHAT_REFRESH_NOTIFY_STEP, REFRESH_NOTIFY_STEP_DURATION);
-                break;
-            }
-            default:
-                break;
+        StepHandler(TodayStepService service) {
+            this.service = new WeakReference<>(service);
         }
-        return false;
+
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case HANDLER_WHAT_SAVE_STEP:
+                    if (service.get() != null) {
+                        //走路停止保存数据库
+                        service.get().setDbSaveCount(0);
+                        service.get().saveDb(CURRENT_STEP, true);
+                    }
+                    break;
+                case HANDLER_WHAT_REFRESH_NOTIFY_STEP:
+                    //刷新通知栏
+                    if (service.get() != null) {
+                     service.get().updateTodayStep(CURRENT_STEP);
+
+                     removeMessages(HANDLER_WHAT_REFRESH_NOTIFY_STEP);
+                     sendEmptyMessageDelayed(HANDLER_WHAT_REFRESH_NOTIFY_STEP, REFRESH_NOTIFY_STEP_DURATION);
+                    }
+                    break;
+            }
+        }
+    }
+
+    private String mUserId;
+
+    public void setDbSaveCount(int mDbSaveCount) {
+        this.mDbSaveCount = mDbSaveCount;
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
 
+        sHandler = new StepHandler(this);
+
         mTodayStepDBHelper = TodayStepDBHelper.factory(getApplicationContext());
 
-        mSensorManager = (SensorManager) this
-                .getSystemService(SENSOR_SERVICE);
-
-        initNotification(CURRENT_STEP);
+        mSensorManager = (SensorManager) this.getSystemService(SENSOR_SERVICE);
 
         getSensorRate();
 
-//        JLogger.i(TAG, "onCreate currStep :" + CURRENT_STEP);
         Map<String, String> map = getLogMap();
         map.put("current_step", String.valueOf(CURRENT_STEP));
-        JLoggerWraper.onEventInfo(this, JLoggerConstant.JLOGGER_SERVICE_INITIALIZE_CURRSTEP, map);
+        LoggerWraper.onEventInfo(this, LoggerConstant.SERVICE_INITIALIZE_CURRSTEP, map);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (null != intent) {
+            mUserId = intent.getStringExtra(INTENT_USER_ID);
+
             mSeparate = intent.getBooleanExtra(INTENT_NAME_0_SEPARATE, false);
             mBoot = intent.getBooleanExtra(INTENT_NAME_BOOT, false);
+            mShowNotification = intent.getBooleanExtra(INTENT_NOTIFICATION_SHOW, false);
+
+            if (mShowNotification) {
+                initNotification(CURRENT_STEP);
+            }
+
             String setStep = intent.getStringExtra(INTENT_STEP_INIT);
             if (!TextUtils.isEmpty(setStep)) {
                 try {
@@ -179,15 +201,15 @@ public class TodayStepService extends Service implements Handler.Callback {
                 }
             }
         }
-//        JLogger.i(TAG, "onStartCommand CurrStep :" + CURRENT_STEP + "   mSeparate:" + mSeparate + "    mBoot:" + mBoot);
         mDbSaveCount = 0;
 
         Map<String, String> map = getLogMap();
+        map.put("user_id", mUserId);
         map.put("current_step", String.valueOf(CURRENT_STEP));
         map.put("mSeparate", String.valueOf(mSeparate));
         map.put("mBoot", String.valueOf(mBoot));
         map.put("mDbSaveCount", String.valueOf(mDbSaveCount));
-        JLoggerWraper.onEventInfo(this, JLoggerConstant.JLOGGER_SERVICE_ONSTARTCOMMAND, map);
+        LoggerWraper.onEventInfo(this, LoggerConstant.SERVICE_ONSTARTCOMMAND, map);
 
         updateNotification(CURRENT_STEP);
         //注册传感器
@@ -200,7 +222,6 @@ public class TodayStepService extends Service implements Handler.Callback {
     }
 
     private synchronized void initNotification(int currentStep) {
-
         nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         int smallIcon = getResources().getIdentifier("icon_step_small", "mipmap", getPackageName());
         if (0 == smallIcon) {
@@ -242,15 +263,14 @@ public class TodayStepService extends Service implements Handler.Callback {
                 .builder();
         mNotificationApiCompat.startForeground(this, NOTIFY_ID);
         mNotificationApiCompat.notify(NOTIFY_ID);
-
     }
 
     @Override
     public IBinder onBind(Intent intent) {
-//        JLogger.i(TAG, "onBind : CurrStep : " + CURRENT_STEP);
         Map<String, String> map = getLogMap();
+        map.put("user_id", mUserId);
         map.put("current_step", String.valueOf(CURRENT_STEP));
-        JLoggerWraper.onEventInfo(this, JLoggerConstant.JLOGGER_SERVICE_ONBIND, map);
+        LoggerWraper.onEventInfo(this, LoggerConstant.SERVICE_ONBIND, map);
 
 
         sHandler.removeMessages(HANDLER_WHAT_REFRESH_NOTIFY_STEP);
@@ -260,12 +280,26 @@ public class TodayStepService extends Service implements Handler.Callback {
     }
 
     private void startStepDetector() {
-
         //android4.4以后如果有stepcounter可以使用计步传感器
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && getStepCounter()) {
             addStepCounterListener();
         } else {
             addBasePedoListener();
+        }
+    }
+
+    private void stopStepDetector() {
+        //android4.4以后如果有stepcounter可以使用计步传感器
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && getStepCounter()) {
+            if (mStepCounter != null) {
+                saveDb(mStepCounter.getCurrentStep(), false);
+                mStepCounter.stopTodayStepCounter();
+            }
+        } else {
+            if (mStepDetector != null) {
+                saveDb(mStepDetector.getCurrentStep(), false);
+                mStepDetector.stopTodayStepCounter();
+            }
         }
     }
 
@@ -275,8 +309,9 @@ public class TodayStepService extends Service implements Handler.Callback {
             CURRENT_STEP = mStepCounter.getCurrentStep();
             updateNotification(CURRENT_STEP);
             Map<String, String> map = getLogMap();
+            map.put("user_id", mUserId);
             map.put("current_step", String.valueOf(CURRENT_STEP));
-            JLoggerWraper.onEventInfo(this, JLoggerConstant.JLOGGER_SERVICE_TYPE_STEP_COUNTER_HADREGISTER, map);
+            LoggerWraper.onEventInfo(this, LoggerConstant.SERVICE_TYPE_STEP_COUNTER_HADREGISTER, map);
             return;
         }
         Sensor countSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
@@ -287,9 +322,10 @@ public class TodayStepService extends Service implements Handler.Callback {
         CURRENT_STEP = mStepCounter.getCurrentStep();
         boolean registerSuccess = mSensorManager.registerListener(mStepCounter, countSensor, SAMPLING_PERIOD_US);
         Map<String, String> map = getLogMap();
+        map.put("user_id", mUserId);
         map.put("current_step", String.valueOf(CURRENT_STEP));
         map.put("current_step_registerSuccess", String.valueOf(registerSuccess));
-        JLoggerWraper.onEventInfo(this, JLoggerConstant.JLOGGER_SERVICE_TYPE_STEP_COUNTER_REGISTER, map);
+        LoggerWraper.onEventInfo(this, LoggerConstant.SERVICE_TYPE_STEP_COUNTER_REGISTER, map);
     }
 
     private void addBasePedoListener() {
@@ -297,17 +333,16 @@ public class TodayStepService extends Service implements Handler.Callback {
         if (null != mStepDetector) {
             WakeLockUtils.getLock(this);
             CURRENT_STEP = mStepDetector.getCurrentStep();
-//            JLogger.i(TAG, "alreadly register TYPE_ACCELEROMETER : CurrStep : " + CURRENT_STEP);
             updateNotification(CURRENT_STEP);
             Map<String, String> map = getLogMap();
+            map.put("user_id", mUserId);
             map.put("current_step", String.valueOf(CURRENT_STEP));
-            JLoggerWraper.onEventInfo(this, JLoggerConstant.JLOGGER_SERVICE_TYPE_ACCELEROMETER_HADREGISTER, map);
+            LoggerWraper.onEventInfo(this, LoggerConstant.SERVICE_TYPE_ACCELEROMETER_HADREGISTER, map);
 
             return;
         }
         //没有计步器的时候开启定时器保存数据
-        Sensor sensor = mSensorManager
-                .getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        Sensor sensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         if (null == sensor) {
             return;
         }
@@ -317,22 +352,45 @@ public class TodayStepService extends Service implements Handler.Callback {
         // 此方法用来注册，只有注册过才会生效，参数：SensorEventListener的实例，Sensor的实例，更新速率
         boolean registerSuccess = mSensorManager.registerListener(mStepDetector, sensor, SAMPLING_PERIOD_US);
         Map<String, String> map = getLogMap();
+        map.put("user_id", mUserId);
         map.put("current_step", String.valueOf(CURRENT_STEP));
         map.put("current_step_registerSuccess", String.valueOf(registerSuccess));
-        JLoggerWraper.onEventInfo(this, JLoggerConstant.JLOGGER_SERVICE_TYPE_ACCELEROMETER_REGISTER, map);
-    }
-
-    @Override
-    public void onDestroy() {
-        JLoggerWraper.onEventInfo(this, JLoggerConstant.JLOGGER_TODAYSTEPSERVICE_ONDESTROY, "CURRENT_STEP=" + CURRENT_STEP);
-        JLoggerWraper.flush();
-        super.onDestroy();
+        LoggerWraper.onEventInfo(this, LoggerConstant.SERVICE_TYPE_ACCELEROMETER_REGISTER, map);
     }
 
     @Override
     public boolean onUnbind(Intent intent) {
-        JLoggerWraper.onEventInfo(this, JLoggerConstant.JLOGGER_TODAYSTEPSERVICE_ONUNBIND, "CURRENT_STEP=" + CURRENT_STEP);
+        LoggerWraper.onEventInfo(this, LoggerConstant.TODAYSTEPSERVICE_ONUNBIND, "CURRENT_STEP=" + CURRENT_STEP);
         return super.onUnbind(intent);
+    }
+
+    @Override
+    public void onDestroy() {
+//        try {
+//            stopStepDetector();
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+
+//        if (mTodayStepDBHelper != null) {
+//            mTodayStepDBHelper.close();
+//            mTodayStepDBHelper = null;
+//        }
+
+        mTodayStepDBHelper = null;
+
+
+        LoggerWraper.onEventInfo(this, LoggerConstant.TODAYSTEPSERVICE_ONDESTROY, "CURRENT_STEP=" + CURRENT_STEP);
+        LoggerWraper.flush();
+
+        CURRENT_STEP = 0;
+        mStepDetector = null;
+        mStepCounter = null;
+
+        sHandler.removeCallbacksAndMessages(null);
+        sHandler = null;
+
+        super.onDestroy();
     }
 
     /**
@@ -340,7 +398,7 @@ public class TodayStepService extends Service implements Handler.Callback {
      *
      * @param currentStep
      */
-    private void updateTodayStep(int currentStep) {
+    public void updateTodayStep(int currentStep) {
 
         CURRENT_STEP = currentStep;
         updateNotification(CURRENT_STEP);
@@ -358,16 +416,17 @@ public class TodayStepService extends Service implements Handler.Callback {
         }
         mDbSaveCount = 0;
 
-        saveDb(false, currentStep);
+        saveDb(currentStep, false);
     }
 
     /**
-     * @param handler     true handler回调保存步数，否false
      * @param currentStep
+     * @param handler     true handler回调保存步数，否false
      */
-    private void saveDb(boolean handler, int currentStep) {
+    public void saveDb(int currentStep, boolean handler) {
 
         TodayStepData todayStepData = new TodayStepData();
+        todayStepData.setUserId(mUserId);
         todayStepData.setToday(getTodayDate());
         todayStepData.setDate(System.currentTimeMillis());
         todayStepData.setStep(currentStep);
@@ -375,18 +434,19 @@ public class TodayStepService extends Service implements Handler.Callback {
             if (!handler || !mTodayStepDBHelper.isExist(todayStepData)) {
                 mTodayStepDBHelper.insert(todayStepData);
                 Map<String, String> map = getLogMap();
+                map.put("user_id", mUserId);
                 map.put("saveDb_currentStep", String.valueOf(currentStep));
-                JLoggerWraper.onEventInfo(this, JLoggerConstant.JLOGGER_SERVICE_INSERT_DB, map);
+                LoggerWraper.onEventInfo(this, LoggerConstant.SERVICE_INSERT_DB, map);
             }
         }
     }
 
     private void cleanDb() {
 
-//        JLogger.i(TAG, "cleanDb");
         Map<String, String> map = getLogMap();
+        map.put("user_id", mUserId);
         map.put("cleanDB_current_step", String.valueOf(CURRENT_STEP));
-        JLoggerWraper.onEventInfo(this, JLoggerConstant.JLOGGER_SERVICE_CLEAN_DB, map);
+        LoggerWraper.onEventInfo(this, LoggerConstant.SERVICE_CLEAN_DB, map);
         mDbSaveCount = 0;
 
         if (null != mTodayStepDBHelper) {
@@ -404,7 +464,7 @@ public class TodayStepService extends Service implements Handler.Callback {
      * 更新通知
      */
     private synchronized void updateNotification(int stepCount) {
-        if (null != mNotificationApiCompat) {
+        if (mShowNotification && null != mNotificationApiCompat) {
             String km = getDistanceByStep(stepCount);
             String calorie = getCalorieByStep(stepCount);
             String contentText = calorie + " 千卡  " + km + " 公里";
@@ -454,11 +514,20 @@ public class TodayStepService extends Service implements Handler.Callback {
         @Override
         public String getTodaySportStepArray() throws RemoteException {
             if (null != mTodayStepDBHelper) {
-                List<TodayStepData> todayStepDataArrayList = mTodayStepDBHelper.getQueryAll();
+                List<TodayStepData> todayStepDataArrayList = mTodayStepDBHelper.getQueryAll(mUserId);
                 JSONArray jsonArray = getSportStepJsonArray(todayStepDataArrayList);
                 return jsonArray.toString();
             }
             return null;
+        }
+
+        @Override
+        public void stopTodayStepCounter() {
+            try {
+                stopStepDetector();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     };
 
@@ -512,7 +581,7 @@ public class TodayStepService extends Service implements Handler.Callback {
             int rate = (int) method.invoke(null, SAMPLING_PERIOD_US);
             Map<String, String> map = getLogMap();
             map.put("getSensorRate", String.valueOf(rate));
-            JLoggerWraper.onEventInfo(this, JLoggerConstant.JLOGGER_SERVICE_SENSORRATE_INVOKE, map);
+            LoggerWraper.onEventInfo(this, LoggerConstant.SERVICE_SENSORRATE_INVOKE, map);
 
         } catch (NoSuchMethodException e) {
             e.printStackTrace();
@@ -546,6 +615,4 @@ public class TodayStepService extends Service implements Handler.Callback {
         }
         return map;
     }
-
-
 }

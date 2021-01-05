@@ -15,14 +15,11 @@ import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
 
-import com.andrjhf.lib.jlogger.JLoggerConstant;
-import com.andrjhf.lib.jlogger.JLoggerWraper;
-
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.today.step.lib.ConstantDef.HANDLER_WHAT_TEST_JLOGGER;
-import static com.today.step.lib.ConstantDef.WHAT_TEST_JLOGGER_DURATION;
+import static com.today.step.lib.ConstantDef.HANDLER_WHAT_TEST_LOGGER;
+import static com.today.step.lib.ConstantDef.WHAT_TEST_LOGGER_DURATION;
 
 /**
  * Sensor.TYPE_STEP_COUNTER
@@ -30,56 +27,61 @@ import static com.today.step.lib.ConstantDef.WHAT_TEST_JLOGGER_DURATION;
  * Created by jiahongfei on 2017/6/30.
  */
 
-class TodayStepCounter implements SensorEventListener {
+class TodayStepCounter implements ITodayStepCounter, SensorEventListener{
 
-    private static final String TAG = "TodayStepCounter";
+    private static final String TAG = TodayStepCounter.class.getSimpleName();
 
     private int sOffsetStep = 0;
     private int sCurrStep = 0;
-    private String mTodayDate;
-    private boolean mCleanStep = true;
-    private boolean mShutdown = false;
+    private String todayDate;
+    private boolean cleanStep = true;
+    private boolean shutdown = false;
     /**
      * 用来标识对象第一次创建，
      */
-    private boolean mCounterStepReset = true;
+    private boolean counterStepReset = true;
 
-    private Context mContext;
-    private OnStepCounterListener mOnStepCounterListener;
+    private Context context;
+    private OnStepCounterListener onStepCounterListener;
 
-    private boolean mSeparate = false;
-    private boolean mBoot = false;
+    private boolean separate = false;
+    /**
+     * 开机启动完成标识
+     */
+    private boolean boot = false;
 
-    private float mJLoggerSensorStep = 0f;
-    private int mJLoggerCounterStep = 0;
-    private int mJLoggerCurrStep = 0;
-    private int mJLoggerOffsetStep = 0;
+    private float loggerSensorStep = 0f;
+    private int loggerCounterStep = 0;
+    private int loggerCurrentStep = 0;
+    private int loggerOffsetStep = 0;
     /**
      * 传感器回调次数
      */
-    private long mJLoggerSensorCount = 0;
+    private long loggerSensorCount = 0;
+
+    private BroadcastReceiver mBatInfoReceiver;
 
     private final Handler sHandler = new Handler(new Handler.Callback() {
         @Override
         public boolean handleMessage(Message msg) {
-            switch (msg.what){
-                case HANDLER_WHAT_TEST_JLOGGER:{
-                    HashMap<String,String> map = new HashMap<>();
-                    map.put("sCurrStep",String.valueOf(mJLoggerCurrStep));
-                    map.put("counterStep",String.valueOf(mJLoggerCounterStep));
-                    map.put("SensorStep",String.valueOf(mJLoggerSensorStep));
-                    map.put("sOffsetStep",String.valueOf(mJLoggerOffsetStep));
-                    map.put("SensorCount",String.valueOf(mJLoggerSensorCount));
+            switch (msg.what) {
+                case HANDLER_WHAT_TEST_LOGGER: {
+                    HashMap<String, String> map = new HashMap<>();
+                    map.put("sCurrStep", String.valueOf(loggerCurrentStep));
+                    map.put("counterStep", String.valueOf(loggerCounterStep));
+                    map.put("SensorStep", String.valueOf(loggerSensorStep));
+                    map.put("sOffsetStep", String.valueOf(loggerOffsetStep));
+                    map.put("SensorCount", String.valueOf(loggerSensorCount));
                     //增加电量、息屏状态
                     int battery = getBattery();
-                    if(battery!=-1){
-                        map.put("battery",String.valueOf(battery));
+                    if (battery != -1) {
+                        map.put("battery", String.valueOf(battery));
                     }
-                    map.put("isScreenOn",String.valueOf(getScreenState()));
-                    Log.e("wcd_map",map.toString());
-                    JLoggerWraper.onEventInfo(mContext,JLoggerConstant.JLOGGER_TYPE_STEP_COUNTER_TIMER,map);
-                    sHandler.removeMessages(HANDLER_WHAT_TEST_JLOGGER);
-                    sHandler.sendEmptyMessageDelayed(HANDLER_WHAT_TEST_JLOGGER,WHAT_TEST_JLOGGER_DURATION);
+                    map.put("isScreenOn", String.valueOf(getScreenState()));
+                    Log.e("wcd_map", map.toString());
+                    LoggerWraper.onEventInfo(context, LoggerConstant.TYPE_STEP_COUNTER_TIMER, map);
+                    sHandler.removeMessages(HANDLER_WHAT_TEST_LOGGER);
+                    sHandler.sendEmptyMessageDelayed(HANDLER_WHAT_TEST_LOGGER, WHAT_TEST_LOGGER_DURATION);
                     break;
                 }
             }
@@ -88,33 +90,33 @@ class TodayStepCounter implements SensorEventListener {
     });
 
     public TodayStepCounter(Context context, OnStepCounterListener onStepCounterListener, boolean separate, boolean boot) {
-        this.mContext = context;
-        this.mSeparate = separate;
-        this.mBoot = boot;
-        this.mOnStepCounterListener = onStepCounterListener;
+        this.context = context;
+        this.separate = separate;
+        this.boot = boot;
+        this.onStepCounterListener = onStepCounterListener;
 
-        WakeLockUtils.getLock(mContext);
+//        WakeLockUtils.getLock(context);
 
-        sCurrStep = (int) PreferencesHelper.getCurrentStep(mContext);
-        mCleanStep = PreferencesHelper.getCleanStep(mContext);
-        mTodayDate = PreferencesHelper.getStepToday(mContext);
-        sOffsetStep = (int) PreferencesHelper.getStepOffset(mContext);
-        mShutdown = PreferencesHelper.getShutdown(mContext);
+        sCurrStep = (int) PreferencesHelper.getCurrentStep(this.context);
+        cleanStep = PreferencesHelper.getCleanStep(this.context);
+        todayDate = PreferencesHelper.getStepToday(this.context);
+        sOffsetStep = (int) PreferencesHelper.getStepOffset(this.context);
+        shutdown = PreferencesHelper.getShutdown(this.context);
         //开机启动监听到，一定是关机开机了
-        boolean isShutdown =  shutdownBySystemRunningTime();
-        if (mBoot || isShutdown) {
-            mShutdown = true;
-            PreferencesHelper.setShutdown(mContext, mShutdown);
+        boolean isShutdown = shutdownBySystemRunningTime();
+        if (this.boot || isShutdown) {
+            shutdown = true;
+            PreferencesHelper.setShutdown(this.context, shutdown);
         }
-        HashMap<String,String> map = new HashMap<>();
-        map.put("sCurrStep",String.valueOf(sCurrStep));
-        map.put("mCleanStep",String.valueOf(mCleanStep));
-        map.put("mTodayDate",String.valueOf(mTodayDate));
-        map.put("sOffsetStep",String.valueOf(sOffsetStep));
-        map.put("mShutdown",String.valueOf(mShutdown));
-        map.put("isShutdown",String.valueOf(isShutdown));
-        map.put("lastSensorStep",String.valueOf(PreferencesHelper.getLastSensorStep(mContext)));
-        JLoggerWraper.onEventInfo(mContext,JLoggerConstant.JLOGGER_TYPE_STEP_CONSTRUCTOR,map);
+        HashMap<String, String> map = new HashMap<>();
+        map.put("sCurrStep", String.valueOf(sCurrStep));
+        map.put("mCleanStep", String.valueOf(cleanStep));
+        map.put("mTodayDate", String.valueOf(todayDate));
+        map.put("sOffsetStep", String.valueOf(sOffsetStep));
+        map.put("mShutdown", String.valueOf(shutdown));
+        map.put("isShutdown", String.valueOf(isShutdown));
+        map.put("lastSensorStep", String.valueOf(PreferencesHelper.getLastSensorStep(this.context)));
+        LoggerWraper.onEventInfo(this.context, LoggerConstant.TYPE_STEP_CONSTRUCTOR, map);
 
         dateChangeCleanStep();
 
@@ -123,15 +125,27 @@ class TodayStepCounter implements SensorEventListener {
         updateStepCounter();
 
         //启动JLogger日志打印
-        sHandler.removeMessages(HANDLER_WHAT_TEST_JLOGGER);
-        sHandler.sendEmptyMessageDelayed(HANDLER_WHAT_TEST_JLOGGER,WHAT_TEST_JLOGGER_DURATION);
+        if (TodayStepManager.isDebug()) {
+            sHandler.removeMessages(HANDLER_WHAT_TEST_LOGGER);
+            sHandler.sendEmptyMessageDelayed(HANDLER_WHAT_TEST_LOGGER, WHAT_TEST_LOGGER_DURATION);
+        }
+    }
+
+    @Override
+    public void initTodayStepCounter() {
+        if (mBatInfoReceiver != null) {
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(Intent.ACTION_TIME_TICK);
+            filter.addAction(Intent.ACTION_DATE_CHANGED);
+            context.registerReceiver(mBatInfoReceiver, filter);
+        }
     }
 
     private void initBroadcastReceiver() {
         final IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_TIME_TICK);
         filter.addAction(Intent.ACTION_DATE_CHANGED);
-        BroadcastReceiver mBatInfoReceiver = new BroadcastReceiver() {
+        mBatInfoReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(final Context context, final Intent intent) {
                 if (Intent.ACTION_TIME_TICK.equals(intent.getAction())
@@ -142,8 +156,17 @@ class TodayStepCounter implements SensorEventListener {
                 }
             }
         };
-        mContext.registerReceiver(mBatInfoReceiver, filter);
+        context.registerReceiver(mBatInfoReceiver, filter);
+    }
 
+    private void unregisterReceiver() {
+        if (mBatInfoReceiver != null) {
+            context.unregisterReceiver(mBatInfoReceiver);
+        }
+
+        if (TodayStepManager.isDebug()) {
+            sHandler.removeMessages(HANDLER_WHAT_TEST_LOGGER);
+        }
     }
 
     @Override
@@ -153,61 +176,61 @@ class TodayStepCounter implements SensorEventListener {
 
             int counterStep = (int) event.values[0];
 
-            if (mCleanStep) {
+            if (cleanStep) {
                 //TODO:只有传感器回调才会记录当前传感器步数，然后对当天步数进行清零，所以步数会少，少的步数等于传感器启动需要的步数，假如传感器需要10步进行启动，那么就少10步
-                Map<String,String> map = new HashMap<>();
-                map.put("clean_before_sCurrStep",String.valueOf(sCurrStep));
-                map.put("clean_before_sOffsetStep",String.valueOf(sOffsetStep));
-                map.put("clean_before_mCleanStep",String.valueOf(mCleanStep));
+                Map<String, String> map = new HashMap<>();
+                map.put("clean_before_sCurrStep", String.valueOf(sCurrStep));
+                map.put("clean_before_sOffsetStep", String.valueOf(sOffsetStep));
+                map.put("clean_before_mCleanStep", String.valueOf(cleanStep));
                 cleanStep(counterStep);
-                map.put("clean_after_sCurrStep",String.valueOf(sCurrStep));
-                map.put("clean_after_sOffsetStep",String.valueOf(sOffsetStep));
-                map.put("clean_after_mCleanStep",String.valueOf(mCleanStep));
-                JLoggerWraper.onEventInfo(mContext,JLoggerConstant.JLOGGER_TYPE_STEP_CLEANSTEP,map);
+                map.put("clean_after_sCurrStep", String.valueOf(sCurrStep));
+                map.put("clean_after_sOffsetStep", String.valueOf(sOffsetStep));
+                map.put("clean_after_mCleanStep", String.valueOf(cleanStep));
+                LoggerWraper.onEventInfo(context, LoggerConstant.TYPE_STEP_CLEANSTEP, map);
             } else {
                 //处理关机启动
-                if (mShutdown || shutdownByCounterStep(counterStep)) {
-                    Map<String,String> map = new HashMap<>();
-                    map.put("shutdown_before_mShutdown",String.valueOf(mShutdown));
-                    map.put("shutdown_before_mCounterStepReset",String.valueOf(mCounterStepReset));
-                    map.put("shutdown_before_sOffsetStep",String.valueOf(sOffsetStep));
+                if (shutdown || shutdownByCounterStep(counterStep)) {
+                    Map<String, String> map = new HashMap<>();
+                    map.put("shutdown_before_mShutdown", String.valueOf(shutdown));
+                    map.put("shutdown_before_mCounterStepReset", String.valueOf(counterStepReset));
+                    map.put("shutdown_before_sOffsetStep", String.valueOf(sOffsetStep));
                     shutdown(counterStep);
-                    map.put("shutdown_after_mShutdown",String.valueOf(mShutdown));
-                    map.put("shutdown_after_mCounterStepReset",String.valueOf(mCounterStepReset));
-                    map.put("shutdown_after_sOffsetStep",String.valueOf(sOffsetStep));
-                    JLoggerWraper.onEventInfo(mContext,JLoggerConstant.JLOGGER_TYPE_STEP_SHUTDOWN,map);
+                    map.put("shutdown_after_mShutdown", String.valueOf(shutdown));
+                    map.put("shutdown_after_mCounterStepReset", String.valueOf(counterStepReset));
+                    map.put("shutdown_after_sOffsetStep", String.valueOf(sOffsetStep));
+                    LoggerWraper.onEventInfo(context, LoggerConstant.TYPE_STEP_SHUTDOWN, map);
                 }
             }
             sCurrStep = counterStep - sOffsetStep;
 
             if (sCurrStep < 0) {
-                Map<String,String> map = new HashMap<>();
-                map.put("tolerance_before_counterStep",String.valueOf(counterStep));
-                map.put("tolerance_before_sCurrStep",String.valueOf(sCurrStep));
-                map.put("tolerance_before_sOffsetStep",String.valueOf(sOffsetStep));
+                Map<String, String> map = new HashMap<>();
+                map.put("tolerance_before_counterStep", String.valueOf(counterStep));
+                map.put("tolerance_before_sCurrStep", String.valueOf(sCurrStep));
+                map.put("tolerance_before_sOffsetStep", String.valueOf(sOffsetStep));
                 //容错处理，无论任何原因步数不能小于0，如果小于0，直接清零
                 cleanStep(counterStep);
-                map.put("tolerance_after_counterStep",String.valueOf(counterStep));
-                map.put("tolerance_after_sCurrStep",String.valueOf(sCurrStep));
-                map.put("tolerance_after_sOffsetStep",String.valueOf(sOffsetStep));
-                JLoggerWraper.onEventInfo(mContext,JLoggerConstant.JLOGGER_TYPE_STEP_TOLERANCE,map);
+                map.put("tolerance_after_counterStep", String.valueOf(counterStep));
+                map.put("tolerance_after_sCurrStep", String.valueOf(sCurrStep));
+                map.put("tolerance_after_sOffsetStep", String.valueOf(sOffsetStep));
+                LoggerWraper.onEventInfo(context, LoggerConstant.TYPE_STEP_TOLERANCE, map);
             }
 
-            PreferencesHelper.setCurrentStep(mContext, sCurrStep);
-            PreferencesHelper.setElapsedRealtime(mContext, SystemClock.elapsedRealtime());
-            PreferencesHelper.setLastSensorStep(mContext, counterStep);
+            PreferencesHelper.setCurrentStep(context, sCurrStep);
+            PreferencesHelper.setElapsedRealtime(context, SystemClock.elapsedRealtime());
+            PreferencesHelper.setLastSensorStep(context, counterStep);
 
-            mJLoggerSensorStep = event.values[0];
-            mJLoggerCounterStep = counterStep;
-            mJLoggerCurrStep = sCurrStep;
-            mJLoggerOffsetStep = sOffsetStep;
+            loggerSensorStep = event.values[0];
+            loggerCounterStep = counterStep;
+            loggerCurrentStep = sCurrStep;
+            loggerOffsetStep = sOffsetStep;
             updateStepCounter();
-            if(mJLoggerSensorCount==0){
-                sHandler.removeMessages(HANDLER_WHAT_TEST_JLOGGER);
-                sHandler.sendEmptyMessageDelayed(HANDLER_WHAT_TEST_JLOGGER,800);
+            if (loggerSensorCount == 0) {
+                sHandler.removeMessages(HANDLER_WHAT_TEST_LOGGER);
+                sHandler.sendEmptyMessageDelayed(HANDLER_WHAT_TEST_LOGGER, 800);
             }
             //用来判断传感器是否回调
-            mJLoggerSensorCount++;
+            loggerSensorCount++;
 
         }
     }
@@ -216,32 +239,32 @@ class TodayStepCounter implements SensorEventListener {
         //清除步数，步数归零，优先级最高
         sCurrStep = 0;
         sOffsetStep = counterStep;
-        PreferencesHelper.setStepOffset(mContext, sOffsetStep);
+        PreferencesHelper.setStepOffset(context, sOffsetStep);
 
-        mCleanStep = false;
-        PreferencesHelper.setCleanStep(mContext, mCleanStep);
-        mJLoggerCurrStep = sCurrStep;
-        mJLoggerOffsetStep = sOffsetStep;
+        cleanStep = false;
+        PreferencesHelper.setCleanStep(context, cleanStep);
+        loggerCurrentStep = sCurrStep;
+        loggerOffsetStep = sOffsetStep;
     }
 
     private void shutdown(int counterStep) {
-        int tmpCurrStep = (int) PreferencesHelper.getCurrentStep(mContext);
+        int tmpCurrStep = (int) PreferencesHelper.getCurrentStep(context);
         //重新设置offset
         sOffsetStep = counterStep - tmpCurrStep;
         //TODO 只有在当天进行过关机，才会进入到这，直接置反??@老大
 //        sOffsetStep = -tmpCurrStep;
-        PreferencesHelper.setStepOffset(mContext, sOffsetStep);
+        PreferencesHelper.setStepOffset(context, sOffsetStep);
 
-        mShutdown = false;
-        PreferencesHelper.setShutdown(mContext, mShutdown);
+        shutdown = false;
+        PreferencesHelper.setShutdown(context, shutdown);
     }
 
     private boolean shutdownByCounterStep(int counterStep) {
-        if (mCounterStepReset) {
+        if (counterStepReset) {
             //只判断一次
-            mCounterStepReset = false;
-            if (counterStep < PreferencesHelper.getLastSensorStep(mContext)) {
-                JLoggerWraper.onEventInfo(mContext,JLoggerConstant.JLOGGER_TYPE_STEP_SHUTDOWNBYCOUNTERSTEP,"当前传感器步数小于上次传感器步数");
+            counterStepReset = false;
+            if (counterStep < PreferencesHelper.getLastSensorStep(context)) {
+                LoggerWraper.onEventInfo(context, LoggerConstant.TYPE_STEP_SHUTDOWNBYCOUNTERSTEP, "当前传感器步数小于上次传感器步数");
                 //当前传感器步数小于上次传感器步数肯定是重新启动了，只是用来增加精度不是绝对的
 //                Logger.e(TAG, "当前传感器步数小于上次传感器步数肯定是重新启动了，只是用来增加精度不是绝对的");
                 return true;
@@ -251,8 +274,8 @@ class TodayStepCounter implements SensorEventListener {
     }
 
     private boolean shutdownBySystemRunningTime() {
-        if (PreferencesHelper.getElapsedRealtime(mContext) > SystemClock.elapsedRealtime()) {
-            JLoggerWraper.onEventInfo(mContext,JLoggerConstant.JLOGGER_TYPE_STEP_SHUTDOWNBYSYSTEMRUNNINGTIME,"本地记录的时间，判断进行了关机操作");
+        if (PreferencesHelper.getElapsedRealtime(context) > SystemClock.elapsedRealtime()) {
+            LoggerWraper.onEventInfo(context, LoggerConstant.TYPE_STEP_SHUTDOWNBYSYSTEMRUNNINGTIME, "本地记录的时间，判断进行了关机操作");
             //上次运行的时间大于当前运行时间判断为重启，只是增加精度，极端情况下连续重启，会判断不出来
 //            Logger.e(TAG, "上次运行的时间大于当前运行时间判断为重启，只是增加精度，极端情况下连续重启，会判断不出来");
             return true;
@@ -260,38 +283,38 @@ class TodayStepCounter implements SensorEventListener {
         return false;
     }
 
-    private synchronized void dateChangeCleanStep(){
+    private synchronized void dateChangeCleanStep() {
 
         //时间改变了清零，或者0点分隔回调
-        if (!getTodayDate().equals(mTodayDate) || mSeparate) {
-            HashMap<String,String> map = new HashMap<>();
-            map.put("getTodayDate()",String.valueOf(getTodayDate()));
-            map.put("mTodayDate",mTodayDate);
-            map.put("mSeparate",String.valueOf(mSeparate));
-            JLoggerWraper.onEventInfo(mContext,JLoggerConstant.JLOGGER_TYPE_STEP_COUNTER_DATECHANGECLEANSTEP,map);
-            WakeLockUtils.getLock(mContext);
+        if (!getTodayDate().equals(todayDate) || separate) {
+            HashMap<String, String> map = new HashMap<>();
+            map.put("getTodayDate()", String.valueOf(getTodayDate()));
+            map.put("mTodayDate", todayDate);
+            map.put("mSeparate", String.valueOf(separate));
+            LoggerWraper.onEventInfo(context, LoggerConstant.TYPE_STEP_COUNTER_DATECHANGECLEANSTEP, map);
+//            WakeLockUtils.getLock(context);
 
-            mCleanStep = true;
-            PreferencesHelper.setCleanStep(mContext, mCleanStep);
+            cleanStep = true;
+            PreferencesHelper.setCleanStep(context, cleanStep);
 
-            mTodayDate = getTodayDate();
-            PreferencesHelper.setStepToday(mContext, mTodayDate);
+            todayDate = getTodayDate();
+            PreferencesHelper.setStepToday(context, todayDate);
 
-            mShutdown = false;
-            PreferencesHelper.setShutdown(mContext, mShutdown);
+            shutdown = false;
+            PreferencesHelper.setShutdown(context, shutdown);
 
-            mBoot = false;
+            boot = false;
 
-            mSeparate = false;
+            separate = false;
 
             sCurrStep = 0;
-            PreferencesHelper.setCurrentStep(mContext, sCurrStep);
+            PreferencesHelper.setCurrentStep(context, sCurrStep);
 
-            mJLoggerSensorCount = 0;
-            mJLoggerCurrStep = sCurrStep;
+            loggerSensorCount = 0;
+            loggerCurrentStep = sCurrStep;
 
-            if(null != mOnStepCounterListener){
-                mOnStepCounterListener.onStepCounterClean();
+            if (null != onStepCounterListener) {
+                onStepCounterListener.onStepCounterClean();
             }
         }
     }
@@ -305,13 +328,13 @@ class TodayStepCounter implements SensorEventListener {
         //每次回调都判断一下是否跨天
         dateChangeCleanStep();
 
-        if (null != mOnStepCounterListener) {
-            mOnStepCounterListener.onChangeStepCounter(sCurrStep);
+        if (null != onStepCounterListener) {
+            onStepCounterListener.onChangeStepCounter(sCurrStep);
         }
     }
 
-    public int getCurrentStep(){
-        sCurrStep = (int) PreferencesHelper.getCurrentStep(mContext);
+    public int getCurrentStep() {
+        sCurrStep = (int) PreferencesHelper.getCurrentStep(context);
         return sCurrStep;
     }
 
@@ -319,16 +342,27 @@ class TodayStepCounter implements SensorEventListener {
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
 
     }
-    private int getBattery(){
-        BatteryManager batteryManager = (BatteryManager)mContext.getSystemService(Context.BATTERY_SERVICE);
+
+    private int getBattery() {
+        BatteryManager batteryManager = (BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
         int battery = -1;
-        if(Build.VERSION.SDK_INT >=Build.VERSION_CODES.LOLLIPOP){
-             battery = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            battery = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
         }
         return battery;
     }
-    private boolean getScreenState(){
-        PowerManager pm = (PowerManager) mContext.getSystemService(Context.POWER_SERVICE);
+
+    private boolean getScreenState() {
+        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         return pm.isScreenOn();
+    }
+
+    @Override
+    public void stopTodayStepCounter() {
+        unregisterReceiver();
+        sCurrStep = 0;
+        sOffsetStep = sCurrStep;
+        PreferencesHelper.clear(context);
+
     }
 }

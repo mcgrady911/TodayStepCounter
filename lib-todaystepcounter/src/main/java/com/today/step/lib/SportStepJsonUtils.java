@@ -11,7 +11,7 @@ public class SportStepJsonUtils {
     public static final String SPORT_DATE = "sportDate";
     public static final String STEP_NUM = "stepNum";
     public static final String DISTANCE = "km";
-    public static final String CALORIE = "kaluli";
+    public static final String CALORIE = "calorie";
     public static final String TODAY = TodayStepDBHelper.TODAY;
 
     static JSONArray getSportStepJsonArray(List<TodayStepData> todayStepDataArrayList) {
@@ -31,10 +31,10 @@ public class SportStepJsonUtils {
         return jsonArray;
     }
 
-    static JSONObject getJSONObject(TodayStepData todayStepData) throws JSONException{
+    static JSONObject getJSONObject(TodayStepData todayStepData) throws JSONException {
         JSONObject subObject = new JSONObject();
         subObject.put(TODAY, todayStepData.getToday());
-        subObject.put(SPORT_DATE, todayStepData.getDate()/1000);
+        subObject.put(SPORT_DATE, todayStepData.getDate() / 1000);
         subObject.put(STEP_NUM, todayStepData.getStep());
         subObject.put(DISTANCE, getDistanceByStep(todayStepData.getStep()));
         subObject.put(CALORIE, getCalorieByStep(todayStepData.getStep()));

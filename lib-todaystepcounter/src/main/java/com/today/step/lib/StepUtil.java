@@ -2,7 +2,7 @@ package com.today.step.lib;
 
 import java.util.Date;
 
-public class StepUtil {
+public final class StepUtil {
 
     /**
      * 是否上传步数，23:55:50~00:05:50分无法上传步数

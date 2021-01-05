@@ -8,6 +8,8 @@ import java.io.Serializable;
 
 public class TodayStepData implements Serializable, Parcelable {
 
+    //用户ID
+    private String userId;
     //当天时间，只显示到天 yyyy-MM-dd
     private String today;
     //步数时间，显示到毫秒
@@ -20,6 +22,7 @@ public class TodayStepData implements Serializable, Parcelable {
     }
 
     protected TodayStepData(Parcel in) {
+        userId = in.readString();
         today = in.readString();
         date = in.readLong();
         step = in.readLong();
@@ -27,6 +30,7 @@ public class TodayStepData implements Serializable, Parcelable {
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
+        dest.writeString(userId);
         dest.writeString(today);
         dest.writeLong(date);
         dest.writeLong(step);
@@ -73,10 +77,19 @@ public class TodayStepData implements Serializable, Parcelable {
         this.today = today;
     }
 
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+
     @Override
     public String toString() {
         return "TodayStepData{" +
-                ", today=" + today +
+                "userId='" + userId + '\'' +
+                ", today='" + today + '\'' +
                 ", date=" + date +
                 ", step=" + step +
                 '}';

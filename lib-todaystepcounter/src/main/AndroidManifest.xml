@@ -23,7 +23,6 @@
             android:enabled="true"
             android:exported="false"
             android:process=":todaystep"
-            android:launchMode="singleInstance"
             android:priority="1000">
             <intent-filter>
 
@@ -38,23 +37,23 @@
             </intent-filter>
         </service>
 
-        <!--开机自启动-->
-        <receiver
-            android:name=".TodayStepBootCompleteReceiver"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
+<!--        &lt;!&ndash;开机自启动&ndash;&gt;-->
+<!--        <receiver-->
+<!--            android:name=".TodayStepBootCompleteReceiver"-->
+<!--            android:enabled="true"-->
+<!--            android:exported="false">-->
+<!--            <intent-filter>-->
+<!--                <action android:name="android.intent.action.BOOT_COMPLETED" />-->
+<!--            </intent-filter>-->
+<!--        </receiver>-->
 
-        <!-- 关机广播 -->
-        <receiver android:name=".TodayStepShutdownReceiver" >
-            <intent-filter>
-                <!-- 关机广播 -->
-                <action android:name="android.intent.action.ACTION_SHUTDOWN" />
-            </intent-filter>
-        </receiver>
+<!--        &lt;!&ndash; 关机广播 &ndash;&gt;-->
+<!--        <receiver android:name=".TodayStepShutdownReceiver" >-->
+<!--            <intent-filter>-->
+<!--                &lt;!&ndash; 关机广播 &ndash;&gt;-->
+<!--                <action android:name="android.intent.action.ACTION_SHUTDOWN" />-->
+<!--            </intent-filter>-->
+<!--        </receiver>-->
 
     </application>
 

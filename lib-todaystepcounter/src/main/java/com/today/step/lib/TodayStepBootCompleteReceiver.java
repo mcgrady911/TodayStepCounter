@@ -10,7 +10,7 @@ import android.support.v4.content.ContextCompat;
  */
 public class TodayStepBootCompleteReceiver extends BroadcastReceiver {
 
-    private static final String TAG = "TodayStepBootCompleteReceiver";
+    private static final String TAG = TodayStepBootCompleteReceiver.class.getSimpleName();
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -18,7 +18,8 @@ public class TodayStepBootCompleteReceiver extends BroadcastReceiver {
         try {
             Intent todayStepIntent = new Intent(context, TodayStepService.class);
             todayStepIntent.putExtra(TodayStepService.INTENT_NAME_BOOT, true);
-            ContextCompat.startForegroundService(context,todayStepIntent);
+            //ContextCompat.startForegroundService(context,todayStepIntent);
+            context.startService(todayStepIntent);
 
         } catch (Exception e) {
             e.printStackTrace();

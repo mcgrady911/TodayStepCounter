@@ -10,7 +10,7 @@ import android.content.Intent;
 
 public class TodayStepShutdownReceiver extends BroadcastReceiver {
 
-    private static final String TAG = "TodayStepShutdownReceiver";
+    private static final String TAG = TodayStepShutdownReceiver.class.getSimpleName();
 
     @Override
     public void onReceive(Context context, Intent intent) {

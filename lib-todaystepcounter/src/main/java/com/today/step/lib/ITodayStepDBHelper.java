@@ -9,17 +9,19 @@ interface ITodayStepDBHelper {
 
     void deleteTable();
 
-    void clearCapacity(String curDate, int limit);
+    void clearCapacity(String userId, String curDate, int limit);
 
     boolean isExist(TodayStepData todayStepData);
 
     void insert(TodayStepData todayStepData);
 
-    TodayStepData getMaxStepByDate(long millis);
+    TodayStepData getMaxStepByDate(String userId, long millis);
 
-    List<TodayStepData> getQueryAll();
+    List<TodayStepData> getQueryAll(String userId);
 
-    List<TodayStepData> getStepListByDate(String dateString);
+    List<TodayStepData> getStepListByDate(String userId, String dateString);
 
-    List<TodayStepData> getStepListByStartDateAndDays(String startDate, int days);
+    List<TodayStepData> getStepListByStartDateAndDays(String userId, String startDate, int days);
+
+    void close();
 }

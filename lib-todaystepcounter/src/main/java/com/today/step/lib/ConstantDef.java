@@ -9,12 +9,12 @@ package com.today.step.lib;
 public class ConstantDef {
 
     /**
-     * 打印JLogger日志
+     * 打印日志
      */
-    public static final int HANDLER_WHAT_TEST_JLOGGER = 0;
+    public static final int HANDLER_WHAT_TEST_LOGGER = 0;
     /**
-     * 打印JLogger日志时间
+     * 打印日志时间
      */
-    public static final int WHAT_TEST_JLOGGER_DURATION = 1000*60*5;//5分钟
+    public static final int WHAT_TEST_LOGGER_DURATION = 1000 * 60 * 5;//5分钟
 
 }
