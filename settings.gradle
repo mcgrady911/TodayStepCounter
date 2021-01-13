@@ -1,1 +1,1 @@
-include ':app', ':lib-todaystepcounter'
+include ':app', ':sports-core'
