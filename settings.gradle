@@ -1,1 +1,1 @@
-include ':app', ':lib-todaystepcounter', ':base-lib-notification', ':lib-jlogger'
+include ':app', ':step_counter_core'

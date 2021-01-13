@@ -3,7 +3,7 @@ package com.today.step;
 import android.content.Context;
 import android.content.Intent;
 
-import com.today.step.lib.BaseClickBroadcast;
+import com.gtmc.sports.step_counter_core.BaseClickBroadcast;
 
 public class MyReceiver extends BaseClickBroadcast {
 

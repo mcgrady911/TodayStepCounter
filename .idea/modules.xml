@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/TodayStepCounter.iml" filepath="$PROJECT_DIR$/.idea/TodayStepCounter.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/TodayStepCounter.app.iml" filepath="$PROJECT_DIR$/.idea/modules/app/TodayStepCounter.app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/step_counter_core/TodayStepCounter.step_counter_core.iml" filepath="$PROJECT_DIR$/.idea/modules/step_counter_core/TodayStepCounter.step_counter_core.iml" />
+    </modules>
+  </component>
+</project>

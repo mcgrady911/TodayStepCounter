@@ -14,9 +14,9 @@ import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
-import com.today.step.lib.ISportStepInterface;
-import com.today.step.lib.TodayStepManager;
-import com.today.step.lib.TodayStepService;
+import com.gtmc.sports.step_counter_core.ISportStepInterface;
+import com.gtmc.sports.step_counter_core.TodayStepManager;
+import com.gtmc.sports.step_counter_core.TodayStepService;
 
 public class MainActivity extends AppCompatActivity {
 
