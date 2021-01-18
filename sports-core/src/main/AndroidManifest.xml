@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.gtmc.step.sports_core">
+    package="com.yonyou.gtmc.step.sports_core">
 
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
@@ -19,7 +19,7 @@
 
         <!--计步Service-->
         <service
-            android:name="com.gtmc.sports_core.TodayStepService"
+            android:name="com.yonyou.gtmc.sports_core.TodayStepService"
             android:enabled="true"
             android:exported="false"
             android:process=":todaystep"
@@ -39,7 +39,7 @@
 
         <!--开机自启动-->
         <receiver
-            android:name="com.gtmc.sports_core.TodayStepBootCompleteReceiver"
+            android:name="com.yonyou.gtmc.sports_core.TodayStepBootCompleteReceiver"
             android:enabled="true"
             android:exported="false">
             <intent-filter>
@@ -48,7 +48,7 @@
         </receiver>
 
         <!-- 关机广播 -->
-        <receiver android:name="com.gtmc.sports_core.TodayStepShutdownReceiver" >
+        <receiver android:name="com.yonyou.gtmc.sports_core.TodayStepShutdownReceiver" >
             <intent-filter>
                 <!-- 关机广播 -->
                 <action android:name="android.intent.action.ACTION_SHUTDOWN" />
